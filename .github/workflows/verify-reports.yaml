@@ -1,0 +1,20 @@
+name: Verify persisted reports
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Count reports in MongoDB
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          namespace=$(kubectl config view --minify -o jsonpath='{..namespace}')
+          kubectl exec -n "$namespace" sausage-store-mongodb-0 -- mongosh --quiet --eval 'db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME,process.env.MONGO_INITDB_ROOT_PASSWORD); const n=db.getSiblingDB("sausage-store").reports.countDocuments({}); if(n<1)throw Error("Reports missing"); print("REPORTS_OK: "+n+" persisted reports");'
