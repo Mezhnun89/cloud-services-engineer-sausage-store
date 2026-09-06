@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.6.2</version>
+        <version>2.7.18</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent> 
     <groupId>com.yandex.practicum.devops</groupId>
     <artifactId>sausage-store</artifactId>
-    <version>${env.VERSION}</version>
+    <version>${revision}</version>
 
 
     <distributionManagement>
@@ -24,7 +24,8 @@
     <name>sausage-store</name>
     <description>Backend for sausage-store</description>
     <properties>
-        <java.version>16</java.version>
+        <java.version>17</java.version>
+        <revision>1.0.0</revision>
         <sonar.projectKey>test_manual</sonar.projectKey>
         <sonar.qualitygate.wait>true</sonar.qualitygate.wait>
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
@@ -32,7 +33,7 @@
         <sonar.jacoco.reportPath>${project.basedir}/../target/jacoco.exec</sonar.jacoco.reportPath>
         <sonar.language>java</sonar.language>
         <jacoco-maven-plugin.version>0.8.7</jacoco-maven-plugin.version>
-        <spring-cloud.version>2021.0.0</spring-cloud.version>
+        <spring-cloud.version>2021.0.9</spring-cloud.version>
     </properties>
 
     <dependencyManagement>
@@ -55,6 +56,7 @@
     </dependencyManagement> 
 
     <dependencies>
+<dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId></dependency>
 
        <dependency>
             <groupId>io.micrometer</groupId>
@@ -77,13 +79,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-
-
-       <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.3.1</version>
         </dependency>
 
         <dependency>
@@ -111,12 +106,7 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
-            <version>8.0.5</version>
-        </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.2.18.jre7</version>
+            <version>9.22.3</version>
         </dependency>
         <!--JACKSON-->
         <dependency>
@@ -190,11 +180,11 @@
             <plugin>
                 <groupId>org.flywaydb</groupId>
                 <artifactId>flyway-maven-plugin</artifactId>
-                <version>8.0.5</version>
+                <version>9.22.3</version>
                 <configuration>
                     <user>${env.PSQL_USER}</user>
                     <password>${env.PSQL_PASSWORD}</password>
-                    <url>jdbc:postgresql://${env.PSQL_HOST}:${env.PSQL_PORT};database=${env.PSQL_DBNAME}</url>
+                    <url>jdbc:postgresql://${env.PSQL_HOST}:${env.PSQL_PORT}/${env.PSQL_DBNAME}</url>
                     <connectRetries>4</connectRetries>
                     <locations>
                         <location>classpath:db/migration</location>

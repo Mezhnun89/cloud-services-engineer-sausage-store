@@ -1,0 +1,11 @@
+replicas: 1
+fqdn: front-mezhnun.2sem.students-projects.ru
+ingressClassName: nginx
+tlsSecret: 2sem-students-projects-wildcard-secret
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi

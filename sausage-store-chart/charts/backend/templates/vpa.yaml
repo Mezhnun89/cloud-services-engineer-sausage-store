@@ -1,0 +1,14 @@
+{{- if .Values.vpa.enabled }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-backend
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRef: {apiVersion: apps/v1, kind: Deployment, name: {{ .Release.Name }}-backend}
+  updatePolicy: {updateMode: "Off"}
+  resourcePolicy:
+    containerPolicies:
+      - containerName: backend
+        controlledResources: [cpu, memory]
+{{- end }}

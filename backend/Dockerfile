@@ -1,31 +1,14 @@
-#Это так называемый мультистейдж docker-файл. Сначала делаем образ, который соберёт нам java-приложение,
-#а затем из него берём собранный артефакт и кладём его в новый образ, чтобы оставить в нём меньше лишнего
-
-# build
-FROM maven:3.8.2-openjdk-16-slim as builder
-# задаём переменную VERSION, которая будет использоваться для сборки проекта
-ARG VERSION=${VERSION}
-WORKDIR /usr/src/app
-COPY ./src ./src
-COPY *.xml ./
-
-RUN mvn package -Dversion.application=${VERSION}
-
-# release
-FROM openjdk:16-jdk-alpine
-ARG VERSION=${VERSION}
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /src
+COPY pom.xml ./
+COPY src ./src
+ARG VERSION=1.0.0
+RUN mvn -B package -Drevision=${VERSION} && cp target/sausage-store-${VERSION}.jar /app.jar
+FROM eclipse-temurin:17-jre-alpine
+RUN addgroup -S app && adduser -S -G app -u 10001 app
 WORKDIR /app
-# создаём пользователя jaruser
-RUN addgroup --system jaruser \
-    && adduser -S -s /bin/false -G jaruser jaruser -D -H \
-    && apk add --no-cache dumb-init==1.2.5-r0 \
-    && apk add --update curl \
-    && rm -rf /var/cache/apk/* \
-    && mkdir -p /logs/reports \
-    && chown -R jaruser:jaruser /logs
-COPY --chown=jaruser:jaruser \
-     --from=builder /usr/src/app/target/sausage-store-${VERSION}.jar ./sausage-store.jar
+COPY --from=builder --chown=10001:10001 /app.jar ./app.jar
+USER 10001
 EXPOSE 8080
-# приложение будет запускаться под пользователем jaruser
-USER jaruser
-ENTRYPOINT ["dumb-init", "java", "-jar", "-Dmyserver.bindPort=8080", "./sausage-store.jar"]
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError"
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

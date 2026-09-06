@@ -1,82 +1,80 @@
 name: Sausage Store Deploy
-
 on:
-  push:
-    branches:
-      - main
-
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sausage-production
+  cancel-in-progress: false
 env:
   NEXUS_HELM_REPO: ${{ secrets.NEXUS_HELM_REPO }}
   NEXUS_HELM_REPO_USER: ${{ secrets.NEXUS_HELM_REPO_USER }}
   NEXUS_HELM_REPO_PASSWORD: ${{ secrets.NEXUS_HELM_REPO_PASSWORD }}
-  SAUSAGE_STORE_NAMESPACE: YOUR_NAMESPACE
-  KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-  VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-
 jobs:
-  # Сборка и пуш образов в докерхаб:
   build_and_push_to_docker_hub:
-      name: Push Docker image to DockerHub
-      runs-on: ubuntu-latest
-      steps:
-        - name: Check out the repo
-          # Получение исходного кода из репозитория:
-          uses: actions/checkout@v3
-        - name: Set up Docker Buildx
-          # Установка сборщика контейнеров Docker:
-          uses: docker/setup-buildx-action@v2
-        - name: Login to Docker 
-          # Авторизация на Docker Hub:
-          uses: docker/login-action@v2
-          # При помощи with передаём в action параметры username и password:
-          with:
-            username: ${{ secrets.DOCKER_USER }}
-            password: ${{ secrets.DOCKER_PASSWORD }}
-            # Хорошо ли держать логин и пароль прямо в коде workflow?
-            # Нет, это нехорошо. Хранить пароль надо в Secrets.
-        - name: Push Backend to DockerHub
-          # Одновременный билд и пуш образа в Docker Hub:
-          uses: docker/build-push-action@v4
-          with:
-            # Параметр context: ./backend/ указывает, что нужный Dockerfile 
-            # находится в ./backend/
-            context: ./backend/
-            # Параметр push: true указывает, что образ нужно не только собрать,
-            # но и отправить на Docker Hub:
-            push: true
-            # В параметре tags задаётся название и тег для образа.
-            # Для каждого пересобранного образа 
-            # устанавливаем тег latest, чтобы потом
-            # на сервере и в docker-compose.yml не указывать версию образа:
-            tags: YOUR_DOCKERHUB/sausage-backend:latest
-            build-args: |
-              VERSION=${{ github.sha }}
-        - name: Push Frontend to DockerHub
-          uses: docker/build-push-action@v4
-          with:
-            context: ./frontend/
-            push: true
-            tags: YOUR_DOCKERHUB/sausage-frontend:latest
-        - name: Push Backend-report to DockerHub
-          uses: docker/build-push-action@v4
-          with:
-            context: ./backend-report/
-            push: true
-            tags: YOUR_DOCKERHUB/sausage-backend-report:latest
-  # Упаковываем helm-чарт и пушим его в Nexus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push three immutable images
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        run: |
+          set -euo pipefail
+          for component in backend frontend backend-report; do
+            docker buildx build --push --build-arg VERSION="$GITHUB_SHA" \
+              -t "$DOCKER_USER/sausage-$component:$GITHUB_SHA" "$component"
+          done
   add_helm_chart_to_nexus:
-      name: Add Helm Chart To Nexus
-      runs-on: ubuntu-latest
-      needs: build_and_push_to_docker_hub
-
-      steps:
-      #### Опишите необходимые шаги
-
-  # Деплоим приложения в кластер Kubernetes с помощью helm-чарт
+    runs-on: ubuntu-latest
+    needs: build_and_push_to_docker_hub
+    outputs:
+      chart_version: ${{ steps.package.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v3.19.0
+      - id: package
+        name: Package and publish chart
+        run: |
+          set -euo pipefail
+          version="1.0.${GITHUB_RUN_NUMBER}"
+          helm lint sausage-store-chart
+          helm package sausage-store-chart --version "$version" --app-version "$GITHUB_SHA" -d /tmp
+          curl --fail --show-error --silent --user "$NEXUS_HELM_REPO_USER:$NEXUS_HELM_REPO_PASSWORD" \
+            --upload-file "/tmp/sausage-store-$version.tgz" "${NEXUS_HELM_REPO%/}/sausage-store-$version.tgz"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
   deploy_helm_chart_to_kubernetes:
-      name: Deploy Helm Chart To Kubernetes
-      runs-on: ubuntu-latest
-      needs: add_helm_chart_to_nexus
-
-      steps:
-      #### Опишите необходимые шаги
+    runs-on: ubuntu-latest
+    needs: add_helm_chart_to_nexus
+    env:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      DB_SECRET_JSON: ${{ secrets.DB_SECRET_JSON }}
+      DOCKER_USER: ${{ secrets.DOCKER_USER }}
+      CHART_VERSION: ${{ needs.add_helm_chart_to_nexus.outputs.chart_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v3.19.0
+      - name: Deploy chart downloaded from Nexus
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          namespace=$(kubectl config view --minify -o jsonpath='{..namespace}')
+          test -n "$namespace"
+          printf '%s' "$DB_SECRET_JSON" | kubectl -n "$namespace" apply -f -
+          helm repo add nexus "$NEXUS_HELM_REPO" --username "$NEXUS_HELM_REPO_USER" --password "$NEXUS_HELM_REPO_PASSWORD"
+          helm repo update nexus
+          helm upgrade --install sausage-store nexus/sausage-store --version "$CHART_VERSION" \
+            -n "$namespace" --set-string global.imageRegistry="$DOCKER_USER" \
+            --set-string global.imageTag="$GITHUB_SHA" --atomic --timeout 12m --history-max 3
+          kubectl get pods,ingress,hpa,vpa -n "$namespace"
+          helm list -n "$namespace"

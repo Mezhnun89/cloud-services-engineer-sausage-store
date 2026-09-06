@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-mongo-init
+  namespace: {{ .Release.Namespace }}
+data:
+  init.js: |
+    const reportDb = db.getSiblingDB('sausage-store');
+    reportDb.createUser({user: 'reports', pwd: process.env.REPORTS_PASSWORD,
+                        roles: [{role: 'readWrite', db: 'sausage-store'}]});
+    reportDb.createCollection('reports');

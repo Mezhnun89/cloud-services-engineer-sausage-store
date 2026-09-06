@@ -1,0 +1,69 @@
+name: Verify Sausage Store
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', 'README.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  cluster_access:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify assigned namespace
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          kubectl get pods,resourcequota,limitrange
+          kubectl get resourcequota -o yaml
+          kubectl api-resources --api-group=autoscaling.k8s.io
+          kubectl get ingressclass || true
+          kubectl get storageclass || true
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v3.19.0
+      - name: Lint and check quota
+        run: |
+          helm lint sausage-store-chart
+          helm template sausage-store sausage-store-chart > /tmp/chart.yaml
+          python3 -m pip install pyyaml
+          python3 scripts/check-chart.py /tmp/chart.yaml
+      - name: Build backend with tests
+        run: docker build -t mezhnun/sausage-backend:ci backend
+      - name: Build report with tests
+        run: docker build -t mezhnun/sausage-backend-report:ci backend-report
+      - name: Build frontend
+        run: docker build -t mezhnun/sausage-frontend:ci frontend
+      - name: Create test cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: sausage-ci
+      - name: Install and verify application
+        run: bash scripts/verify-kind.sh
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p verification/raw
+          kubectl get pods -A > verification/raw/pods.txt 2>&1 || true
+          kubectl get events -n sausage-test --sort-by=.lastTimestamp > verification/raw/events.txt 2>&1 || true
+          for c in backend backend-report frontend; do
+            kubectl logs -n sausage-test deployment/sausage-store-$c --all-containers > verification/raw/$c.log 2>&1 || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sausage-verification
+          path: verification/raw
