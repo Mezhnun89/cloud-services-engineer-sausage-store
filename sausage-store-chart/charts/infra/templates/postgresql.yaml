@@ -33,7 +33,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef: {name: {{ .Values.global.existingSecret }}, key: postgres-password}
-            - {name: PG/var/lib/postgresql/data, value: /var/lib/postgresql/data/pgdata}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
           resources:
             {{- toYaml .Values.postgresql.resources | nindent 12 }}
           readinessProbe:

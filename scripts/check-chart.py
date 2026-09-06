@@ -1,9 +1,10 @@
-import sys,yaml
+import sys,yaml,re
 items=list(yaml.safe_load_all(open(sys.argv[1])))
 apps=[x for x in items if x and x['kind'] in ('Deployment','StatefulSet')]
 assert len(apps)==5
 for x in apps:
  for c in x['spec']['template']['spec']['containers']:
+  assert all(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',e['name']) for e in c.get('env',[])),c['name']
   assert all(k in c['resources'][v] for v in ['requests','limits'] for k in ['cpu','memory'])
 assert len([x for x in items if x and x['kind']=='Service'])==5
 # Worst case: backend surge (2), HPA at max (3), frontend (1), two DBs.

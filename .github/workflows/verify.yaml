@@ -60,6 +60,10 @@ jobs:
           mkdir -p verification/raw
           kubectl --request-timeout=5s get pods -A > verification/raw/pods.txt 2>&1 || true
           kubectl --request-timeout=5s get events -n sausage-test --sort-by=.lastTimestamp > verification/raw/events.txt 2>&1 || true
+          kubectl --request-timeout=5s describe pods -n sausage-test > verification/raw/describe.txt 2>&1 || true
+          for db in postgresql mongodb; do
+            kubectl --request-timeout=5s logs -n sausage-test sausage-store-$db-0 > verification/raw/$db.log 2>&1 || true
+          done
           for c in backend backend-report frontend; do
             kubectl --request-timeout=5s logs -n sausage-test deployment/sausage-store-$c --all-containers > verification/raw/$c.log 2>&1 || true
           done

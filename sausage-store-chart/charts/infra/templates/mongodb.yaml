@@ -32,7 +32,7 @@ spec:
             - name: MONGO_INITDB_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef: {name: {{ .Values.global.existingSecret }}, key: mongo-root-password}
-            - {name: MONGO_INITDB_/data/dbBASE, value: sausage-store}
+            - {name: MONGO_INITDB_DATABASE, value: sausage-store}
             - name: REPORTS_PASSWORD
               valueFrom:
                 secretKeyRef: {name: {{ .Values.global.existingSecret }}, key: reports-password}

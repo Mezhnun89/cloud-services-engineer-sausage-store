@@ -13,7 +13,7 @@ x={'apiVersion':'v1','kind':'Secret','metadata':{'name':'sausage-store-db','name
 open('/tmp/db-secret.json','w').write(json.dumps(x))
 SECRET
 kubectl apply -f /tmp/db-secret.json
-helm upgrade --install sausage-store sausage-store-chart -n sausage-test   --set global.imageTag=ci --set backend.vpa.enabled=false --set backend-report.hpa.enabled=false   --wait --timeout 10m
+helm upgrade --install sausage-store sausage-store-chart -n sausage-test   --set global.imageTag=ci --set backend.vpa.enabled=false --set backend-report.hpa.enabled=false   --wait --timeout 5m
 kubectl exec -n sausage-test sausage-store-postgresql-0 -- psql -U store -d store -Atc   "SELECT version,success FROM flyway_schema_history ORDER BY installed_rank; SELECT count(*) FROM orders;" | tee verification/raw/migrations.txt
 kubectl port-forward -n sausage-test svc/sausage-store-frontend 8088:8080 > /tmp/pf.log 2>&1 &
 pf=$!

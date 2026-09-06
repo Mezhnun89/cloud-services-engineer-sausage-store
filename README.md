@@ -1,36 +1,102 @@
-# Sausage Store
+# «Сосисочная» — финальный проект второго семестра
 
-![image](https://user-images.githubusercontent.com/9394918/121517767-69db8a80-c9f8-11eb-835a-e98ca07fd995.png)
+Учебный проект Межнуна Оруджалиева. Основа: [шаблон Практикума](https://github.com/yandex-praktikum/cloud-services-engineer-sausage-store-project-sem2).
 
+## Состояние
 
-## Technologies used
+Реализованы Dockerfiles, четыре миграции, Helm-чарт, CI проверки и workflow публикации/деплоя.
+**Развёртывание в учебном namespace и публикация в Nexus пока не выполнены**: требуется настройка секретов и вход в учебный Nexus. Результаты CI: [Actions](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions).
 
-* Frontend – TypeScript, Angular.
-* Backend  – Java 16, Spring Boot, Spring Data.
-* Database – H2.
+## Архитектура
 
-## Installation guide
-### Backend
+Ingress TLS → frontend (Angular + Nginx) → backend (Java 17 / Spring Boot) → PostgreSQL и MongoDB.
+Отдельный Go backend-report сохраняет отчёты в MongoDB.
 
-Install Java 16 and maven and run:
+- `backend/`: multi-stage образ, непривилегированный пользователь, Flyway при старте Spring Boot. Hibernate проверяет схему, но не меняет её.
+- `frontend/`: production-сборка Angular, Nginx от UID 101, проксирование `/api/` в backend через ConfigMap.
+- `backend-report/`: исправлены имя стадии, путь бинарного файла; сборка выполняет Go-тесты.
+- `sausage-store-chart/`: родительский Helm-чарт, сабчарты backend, backend-report, frontend, infra.
+- `scripts/`: проверка квот, проверка приложения в kind, генерация приватного Secret.
+
+## Миграции
+
+Миграции перенесены из [моего DBOps-проекта](https://github.com/Mezhnun89/cloud-services-engineer-dbops-project/tree/main/migrations).
+
+| Миграция | Результат |
+|---|---|
+| V001 | Исходная схема магазина |
+| V002 | Нормализация, первичные и внешние ключи |
+| V003 | 6 товаров и **10 000** заказов/позиций; синхронизация identity-последовательностей |
+| V004 | Индексы по дате заказа и внешним ключам |
+
+В PostgreSQL и MongoDB используются StatefulSet и PVC по 2 GiB. MongoDB создаёт пользователя `reports` с ролью readWrite и коллекцию через init-скрипт при первом запуске пустого PVC. Повторная установка поверх существующего PVC не меняет пароль автоматически.
+
+## Квоты и обновления
+
+Backend: RollingUpdate, maxSurge=1, maxUnavailable=0; backend-report: Recreate.
+VPA backend работает в режиме `Off` (рекомендации CPU/памяти); HPA backend-report: 1–3 реплики, CPU 75%.
+Backend имеет startup/readiness/liveness probes `/actuator/health`.
+
+Худший предусмотренный случай — 2 backend, 2 frontend, 3 report и 2 БД:
+
+| Ресурс | Сумма | Квота |
+|---|---:|---:|
+| CPU requests | 1050m | 2000m |
+| CPU limits | 2950m | 3000m |
+| Memory requests | 992Mi | 1000Mi |
+| Memory limits | 2472Mi | 2500Mi |
+| Pods | 9 | 10 |
+| Services | 5 | 5 |
+| PVC / storage | 2 / 4Gi | 4 / 5Gi |
+
+Для дополнительных отладочных pod может не хватить свободной квоты памяти. Перед изменением реплик/ресурсов проверяйте суммарный бюджет. История Helm ограничена тремя ревизиями из-за квоты Secrets.
+
+## Подготовка развёртывания
+
+1. В уроке получения namespace скачать kubeconfig. Срок доступа — 21 день. **Не коммитить этот файл**.
+2. В учебном [Nexus](https://nexus.cloud-services-engineer.education-services.ru) создать `helm (hosted)`, например `mezhnun-sausage`, с `Deployment policy: Allow redeploy`.
+3. Создать файл с паролями один раз:
+   ```bash
+   python3 scripts/create-db-secret.py ../sausage-db-secret.json
+   ```
+   Хранить его приватно. Не генерировать новые пароли поверх существующих PVC.
+4. Заполнить GitHub Actions Secrets репозитория:
+
+| Secret | Содержимое |
+|---|---|
+| DOCKER_USER | `mezhnun` |
+| DOCKER_PASSWORD | Docker Hub PAT с правом записи образов |
+| KUBE_CONFIG | Полный kubeconfig из тренажёра, обычный YAML |
+| DB_SECRET_JSON | Содержимое сгенерированного приватного JSON |
+| NEXUS_HELM_REPO | URL созданного Hosted Helm репозитория |
+| NEXUS_HELM_REPO_USER | Учебный пользователь Nexus для API |
+| NEXUS_HELM_REPO_PASSWORD | Его пароль/токен для API |
+
+Секреты предыдущего проекта не наследуются новым репозиторием. Пароли/токены не нужно присылать в чат или включать в README.
+
+5. Установить repository variable `CLUSTER_ACCESS_ENABLED=true`, затем запустить `Verify Sausage Store`. Проверка доступа к namespace включается только после настройки kubeconfig.
+6. Убедиться, что `frontend.fqdn` в values.yaml свободен/допустим в учебном кластере. Сейчас задан `front-mezhnun.2sem.students-projects.ru`; TLS Secret: `2sem-students-projects-wildcard-secret`.
+7. Запустить `Sausage Store Deploy` вручную. Workflow собирает и публикует три образа с тегом commit SHA, упаковывает Helm-чарт в Nexus и устанавливает **версию из Nexus**, используя тот же SHA образов. Чувствительные данные применяются отдельным Secret, не через Helm values.
 
 ```bash
-cd backend
-mvn package
-cd target
-java -jar sausage-store-0.0.1-SNAPSHOT.jar
+helm lint sausage-store-chart
+kubectl get pods,svc,ingress,hpa,vpa
+kubectl describe resourcequota
+helm list
+kubectl describe vpa sausage-store-backend
+kubectl describe hpa sausage-store-backend-report
 ```
 
-### Frontend
+Проверить `STATUS: deployed`, VPA `RecommendationProvided`, HPA с реальными метриками и оформление заказа через HTTPS. Лишь после этого сдавать ссылку на репозиторий.
 
-Install NodeJS and npm on your computer and run:
+## Проверки
 
-```bash
-cd frontend
-npm install
-npm run build
-npm install -g http-server
-sudo http-server ./dist/frontend/ -p 80 --proxy http://localhost:8080
-```
+`Verify Sausage Store` собирает все три образа, выполняет Java/Go тесты и устанавливает чарт в временный kind-кластер. Скрипт проверяет выдачу frontend, каталог из шести товаров, создание заказа после seed (id > 10000), итоговую сумму и сохранение заказа после пересоздания PostgreSQL pod. Артефакт `sausage-verification` содержит результаты и диагностику.
 
-Then open your browser and go to [http://localhost](http://localhost)
+В kind VPA/HPA выключены, поскольку этот тест проверяет приложение и хранилище. Их работу необходимо отдельно подтвердить в учебном кластере; успешный kind-тест не считается подтверждением облачного деплоя.
+
+## Ограничения учебного шаблона
+
+Angular 6 и Spring Boot 2.x унаследованы от курса. Обновлён Java runtime и исправлена production-сборка, но полноценное обновление всех зависимостей и аудит безопасности здесь не заявляются. Builder использует `--openssl-legacy-provider` только для старого webpack. `--ignore-scripts` пропускает установочные скрипты старых npm-пакетов; проект использует CSS, а не нативный node-sass.
+
+Дополнительное задание с Vault пока не выполнено. Пароли вынесены в Kubernetes Secret; это не эквивалент интеграции с Vault. Источник отчётов Go-сервиса — внешний учебный API из исходного шаблона; его доступность проверяется при практическом запуске.
