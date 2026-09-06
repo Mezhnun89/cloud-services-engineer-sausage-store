@@ -1,0 +1,33 @@
+{
+  "commit": "758dfbb85e8f70bebbde6a4c6212d84be693121c",
+  "run_url": "https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34055252580",
+  "conclusion": "success",
+  "environment": "ephemeral kind, namespace sausage-test",
+  "checks": {
+    "three_images_build": "pass",
+    "java_tests": 4,
+    "go_tests": "pass",
+    "helm_lint": "pass",
+    "rollout_and_hpa_quota_budget": "pass",
+    "helm_status": "deployed",
+    "flyway_migrations": [
+      "001",
+      "002",
+      "003",
+      "004"
+    ],
+    "seed_orders": 10000,
+    "catalog_products": 6,
+    "create_order_after_seed": "pass",
+    "order_total": 640,
+    "postgresql_pod_replacement_retains_order": "pass"
+  },
+  "not_verified": [
+    "provided Kubernetes namespace deployment",
+    "Docker Hub image publication",
+    "Nexus chart publication",
+    "HTTPS and browser cart interactions in provided cluster",
+    "VPA recommendations and HPA metrics in provided cluster",
+    "Vault optional task"
+  ]
+}
