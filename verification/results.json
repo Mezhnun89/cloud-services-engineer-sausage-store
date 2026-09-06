@@ -23,11 +23,21 @@
     "postgresql_pod_replacement_retains_order": "pass"
   },
   "not_verified": [
-    "provided Kubernetes namespace deployment",
-    "Docker Hub image publication",
-    "Nexus chart publication",
-    "HTTPS and browser cart interactions in provided cluster",
-    "VPA recommendations and HPA metrics in provided cluster",
     "Vault optional task"
-  ]
+  ],
+  "cloud": {
+    "deploy_run": 34056638324,
+    "verification_run": 34056994565,
+    "reports_run": 34057076100,
+    "url": "https://front-mezhnun.2sem.students-projects.ru",
+    "docker_hub_publication": "pass",
+    "nexus_publication_and_install": "pass",
+    "helm_status": "deployed",
+    "https_catalog_order": "pass",
+    "browser_add_remove_order": "pass",
+    "hpa_metrics": "pass",
+    "vpa_recommendations": "pass",
+    "mongodb_persisted_reports": "pass",
+    "pvc": "two Bound PVCs, 2Gi each"
+  }
 }

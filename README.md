@@ -4,8 +4,15 @@
 
 ## Состояние
 
-Реализованы Dockerfiles, четыре миграции, Helm-чарт, CI проверки и workflow публикации/деплоя.
-**Развёртывание в учебном namespace и публикация в Nexus пока не выполнены**: требуется настройка секретов и вход в учебный Nexus. Проверка [CI №34055252580](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34055252580) **успешна**: все образы собраны, 4 Java-теста и Go-тесты прошли, Helm установил приложение в kind, выполнены 4 миграции, созданы 10 000 seed-заказов, новый заказ оформлен и сохранён после пересоздания PostgreSQL Pod. Учебный кластер в этом запуске не проверялся.
+Проект развёрнут в учебном Kubernetes: [открыть магазин](https://front-mezhnun.2sem.students-projects.ru).
+
+- [CI приложения](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34055252580): три образа, 4 Java-теста, Go-тесты, Helm lint, миграции и сохранение заказа после пересоздания PostgreSQL Pod в kind.
+- [Публикация и деплой](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34056638324): образы опубликованы в Docker Hub; Helm-чарт опубликован в Nexus и установлен именно оттуда, release `sausage-store` в статусе `deployed`.
+- [Проверка учебного кластера](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34056994565): HTTPS, шесть товаров, заказ на 640 ₽, четыре успешные миграции, HPA с метриками CPU и VPA с рекомендациями.
+- [Проверка MongoDB](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34057076100): коллекция `sausage-store.reports` содержит сохранённые отчёты.
+- В браузере проверены добавление и удаление товара, сумма корзины и сообщение «Заказ успешно оформлен».
+
+Оба PVC имеют статус Bound и размер 2Gi. Доступ к учебному namespace ограничен 21 днём с момента выдачи 6 сентября 2026 года. Vault — дополнительное задание, не реализовано.
 
 ## Архитектура
 
@@ -103,4 +110,4 @@ Angular 6 и Spring Boot 2.x унаследованы от курса. Обно�
 
 ## Доступ к учебному кластеру
 
-[Проверка №34055842027](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34055842027) успешна: namespace доступен, TLS Secret существует, VPA API и API метрик отвечают. `KUBE_CONFIG`, `DB_SECRET_JSON` и `DOCKER_USER` настроены. Для публикации ещё нужны `DOCKER_PASSWORD` и три Nexus Secrets. Приложение в учебный namespace пока не установлено.
+[Проверка доступа №34055842027](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34055842027) успешна. Все необходимые GitHub Actions Secrets настроены; значения не хранятся в репозитории. Для повторного деплоя используется `Sausage Store Deploy`; для проверки — `Verify training deployment` и `Verify persisted reports`.
