@@ -6,3 +6,4 @@
 *kubeconfig*
 *.tgz
 verification/raw/
+*db-secret*.json

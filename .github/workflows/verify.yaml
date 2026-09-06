@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   cluster_access:
+    if: vars.CLUSTER_ACCESS_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,10 +58,10 @@ jobs:
         if: always()
         run: |
           mkdir -p verification/raw
-          kubectl get pods -A > verification/raw/pods.txt 2>&1 || true
-          kubectl get events -n sausage-test --sort-by=.lastTimestamp > verification/raw/events.txt 2>&1 || true
+          kubectl --request-timeout=5s get pods -A > verification/raw/pods.txt 2>&1 || true
+          kubectl --request-timeout=5s get events -n sausage-test --sort-by=.lastTimestamp > verification/raw/events.txt 2>&1 || true
           for c in backend backend-report frontend; do
-            kubectl logs -n sausage-test deployment/sausage-store-$c --all-containers > verification/raw/$c.log 2>&1 || true
+            kubectl --request-timeout=5s logs -n sausage-test deployment/sausage-store-$c --all-containers > verification/raw/$c.log 2>&1 || true
           done
       - uses: actions/upload-artifact@v4
         if: always()

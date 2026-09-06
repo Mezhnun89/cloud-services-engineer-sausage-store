@@ -7,7 +7,7 @@ for x in apps:
   assert all(k in c['resources'][v] for v in ['requests','limits'] for k in ['cpu','memory'])
 assert len([x for x in items if x and x['kind']=='Service'])==5
 # Worst case: backend surge (2), HPA at max (3), frontend (1), two DBs.
-counts={'backend':2,'backend-report':3,'frontend':1,'postgresql':1,'mongodb':1}
+counts={'backend':2,'backend-report':3,'frontend':2,'postgresql':1,'mongodb':1}
 totals={k:0 for k in ('requests_cpu','limits_cpu','requests_memory','limits_memory')}
 for x in apps:
  for c in x['spec']['template']['spec']['containers']:
