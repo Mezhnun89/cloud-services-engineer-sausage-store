@@ -100,3 +100,7 @@ kubectl describe hpa sausage-store-backend-report
 Angular 6 и Spring Boot 2.x унаследованы от курса. Обновлён Java runtime и исправлена production-сборка, но полноценное обновление всех зависимостей и аудит безопасности здесь не заявляются. Builder использует `--openssl-legacy-provider` только для старого webpack. `--ignore-scripts` пропускает установочные скрипты старых npm-пакетов; проект использует CSS, а не нативный node-sass.
 
 Дополнительное задание с Vault пока не выполнено. Пароли вынесены в Kubernetes Secret; это не эквивалент интеграции с Vault. Источник отчётов Go-сервиса — внешний учебный API из исходного шаблона; его доступность проверяется при практическом запуске.
+
+## Доступ к учебному кластеру
+
+[Проверка №34055842027](https://github.com/Mezhnun89/cloud-services-engineer-sausage-store/actions/runs/34055842027) успешна: namespace доступен, TLS Secret существует, VPA API и API метрик отвечают. `KUBE_CONFIG`, `DB_SECRET_JSON` и `DOCKER_USER` настроены. Для публикации ещё нужны `DOCKER_PASSWORD` и три Nexus Secrets. Приложение в учебный namespace пока не установлено.
