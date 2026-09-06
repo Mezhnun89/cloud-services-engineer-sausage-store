@@ -1,0 +1,26 @@
+name: Check training cluster access
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Inspect assigned namespace
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          namespace=$(kubectl config view --minify -o jsonpath='{..namespace}')
+          test -n "$namespace"
+          kubectl --request-timeout=30s get pods,resourcequota,limitrange -n "$namespace"
+          kubectl --request-timeout=30s describe resourcequota -n "$namespace"
+          kubectl --request-timeout=30s get secret 2sem-students-projects-wildcard-secret -n "$namespace" -o custom-columns=NAME:.metadata.name,TYPE:.type
+          kubectl --request-timeout=30s api-resources --api-group=autoscaling.k8s.io
+          kubectl --request-timeout=30s get hpa,vpa -n "$namespace"
+          kubectl --request-timeout=30s get --raw "/apis/metrics.k8s.io/v1beta1/namespaces/$namespace/pods"
