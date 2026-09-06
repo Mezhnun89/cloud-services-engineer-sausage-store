@@ -1,0 +1,45 @@
+name: Verify training deployment
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify HTTPS, application and autoscaling
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          namespace=$(kubectl config view --minify -o jsonpath='{..namespace}')
+          mkdir -p verification-cloud
+          kubectl get pods,svc,ingress,hpa,vpa,pvc -n "$namespace" -o wide | tee verification-cloud/resources.txt
+          kubectl describe resourcequota -n "$namespace" > verification-cloud/quota.txt
+          host=$(kubectl get ingress -n "$namespace" -o jsonpath='{.items[0].spec.rules[0].host}')
+          test -n "$host"
+          python3 scripts/smoke.py "https://$host" | tee verification-cloud/smoke.txt
+          kubectl exec -n "$namespace" sausage-store-postgresql-0 -- psql -U store -d store -c 'SELECT version,description,success FROM flyway_schema_history ORDER BY installed_rank;' | tee verification-cloud/migrations.txt
+          kubectl wait -n "$namespace" --for=condition=ScalingActive hpa/sausage-store-backend-report --timeout=180s
+          kubectl wait -n "$namespace" --for=condition=RecommendationProvided vpa/sausage-store-backend --timeout=300s
+          kubectl get hpa sausage-store-backend-report -n "$namespace" -o json > verification-cloud/hpa.json
+          kubectl get vpa sausage-store-backend -n "$namespace" -o json > verification-cloud/vpa.json
+          python3 - <<'PY'
+          import json
+          h=json.load(open('verification-cloud/hpa.json'))
+          v=json.load(open('verification-cloud/vpa.json'))
+          assert h['status'].get('currentMetrics'), 'HPA metrics missing'
+          recommendations=v['status']['recommendation']['containerRecommendations']
+          assert any('cpu' in r['target'] and 'memory' in r['target'] for r in recommendations)
+          print('CLOUD_OK: HTTPS, catalog, paid order, migrations, HPA metrics and VPA recommendations')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloud-verification
+          path: verification-cloud/
